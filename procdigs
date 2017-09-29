@@ -1,0 +1,113 @@
+#!/usr/bin/env python
+from os import path
+import sys
+# import argparse
+import glob
+import re
+import wave
+import time
+import csv
+import sox
+import subprocess
+import hashlib
+
+def main():
+
+	paths = ['./']
+	if len(sys.argv) > 1:
+		paths = sys.argv[1:]
+
+	fieldnames = [
+		'path',
+		'id',
+		'side',
+		'dig',
+		'take',
+		'notes',	
+		'channels',
+		'sample_rate',
+		'bitrate',
+		'num_samples',
+		'encoding',
+		'precision',
+		'duration',		
+		'size',
+		'md5',
+		'updated at (UTC)',
+
+	]
+
+	csv_writer = csv.DictWriter(sys.stdout, fieldnames = fieldnames, quoting=csv.QUOTE_MINIMAL)
+	csv_writer.writeheader()
+	file_pattern = re.compile('^(?:.+/)(.+?)-([ab])-(d\d+)-(t\d+)(?:-(.+))?.wav$')
+	for this_path in paths:
+		file_paths = glob.glob(this_path + '/*')
+		for file_path in file_paths:			
+			m = file_pattern.match(file_path)
+			if m:				
+				file_entry = get_file_information(file_path, m)
+				csv_writer.writerow(file_entry)
+
+def get_soxi_line(reg, input):
+	return re.sub(reg, '', input) 
+
+def get_file_intrinsic_information(file_path):
+	info_line = re.compile('(.*?):(.+)')
+	output = subprocess.check_output(['soxi', file_path]).split("\n")
+	replace_header = re.compile('.*?: ')
+
+	result = {
+		'channels': get_soxi_line(replace_header, output[2]), #channels
+		'sample_rate': get_soxi_line(replace_header, output[3]), #sample rate
+		'precision': get_soxi_line(replace_header, output[4]), #precision
+		'duration': re.sub('\s=.+$', '', get_soxi_line(replace_header, output[5])), #duration
+		'bitrate': get_soxi_line(replace_header, output[7]), #bit rate
+		'encoding': get_soxi_line(replace_header, output[8]) #encoding
+	}
+	return result
+
+
+def get_file_extrinsic_information(file_path, m):
+	file_entry = {
+		'path': path.abspath(file_path),
+		'id': m.group(1),
+		'side': m.group(2),
+		'dig': m.group(3),
+		'take': m.group(4),
+		'notes': m.group(5),	
+		'updated at (UTC)': time.strftime("%d %b %Y %H:%M:%S", time.gmtime(path.getmtime(file_path))),
+		'size': get_size(path.getsize(file_path)),
+		'md5': md5(file_path)
+	}
+
+	return file_entry
+
+
+# from https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
+def md5(fname):
+	hash_md5 = hashlib.md5()
+	with open(fname, "rb") as f:
+		for chunk in iter(lambda: f.read(4096), b""):
+			hash_md5.update(chunk)
+	return hash_md5.hexdigest()
+
+def get_file_information(file_path, m):
+	# test = sox.file_info.info(file_path)
+	
+	file_file_extrinsic_information = get_file_extrinsic_information(file_path, m)
+	file_intrinsic_information = get_file_intrinsic_information(file_path)
+
+	result = dict(file_intrinsic_information, **file_file_extrinsic_information)
+
+	return result
+
+# from https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
+def get_size(num, suffix='B'):
+	for unit in ['','K','M','G','T','P','E','Z']:
+		if abs(num) < 1024.0:
+			return "%3.2f%s%s" % (num, unit, suffix)
+		num /= 1024.0
+	return "%.1f%s%s" % (num, 'Yi', suffix)
+
+if __name__ == "__main__":
+	main()
