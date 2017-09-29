@@ -20,41 +20,29 @@ def main():
 	#
 	spreadsheet_id = '1lX18yh9XkIPvJvIGQwaQNrivtHWekgOYEqDG7AhDFhs'
 	id_range = 'Audio Cassettes!A2:B'
-	data_range = 'Audio Cassettes!L2:M'
-	service = get_service()
+	prev_data_range = 'Audio Cassettes!L2:M'
+	results_range = 'Audio Cassettes!C2:M'
+	processed_file_path = './processed.csv'
 
+	service = get_service()
 	inventory = get_inventory_data(service = service,
 		spreadsheet_id = spreadsheet_id, range = id_range)
 
 	# prev_data is an array of strings in json format describing files already
 	# found
 	prev_data = get_inventory_data(service = service,
-		spreadsheet_id = spreadsheet_id, range = data_range)
-
-
-	# print "DDD"
-	# print prev_data
-	# print "<<<"
-	# pivot file information should be grabbed from google spreadsheet
-
-	# pivot_file_path = get_inventory_data(spreadsheet_id = spreadsheet_id,
-						# id_range = id_range)
-	# processed_file_path = sys.argv[1]
-	processed_file_path = './processed.csv'
-
-	# pivot_file = get_file_dictionary(pivot_file_path)
+		spreadsheet_id = spreadsheet_id, range = prev_data_range)
+	
 	processed_file = get_file_dictionary(processed_file_path)
 	existing_files = get_existing_files(processed_file)
-	pivot_file = inventory
-	# add file count column if it does not exist to pivot
+	pivot_file = inventory	
 
 	result = []
 
-	
+	pivot_file_count = len(pivot_file)
+	progress(0, pivot_file_count)
 	for index, file in enumerate(pivot_file):
-
-		# media_id = file[' Media Identifier'].strip()
-		# side = normalized_side(file['Side'])
+		blank_row = [''] * 11
 		if len(file) >= 2:
 			media_id = file[0]
 			side = normalized_side(file[1])
@@ -62,17 +50,17 @@ def main():
 				key = media_id + '-' + side
 				existing = find_existing_files(existing_files, key)
 				# check if already exists
-				# result.append([json.dumps(existing), len(existing)])
 				result.append(add_new_files(prev_data, index, existing))
 			else:
-				result.append([''])
+				result.append(blank_row)
 		else:
-			result.append([''])
-
+			result.append(blank_row)
+		progress(index+1, pivot_file_count)
 
 
 	set_processed_inventory_data(service = service,
-		spreadsheet_id = spreadsheet_id, range = data_range, values=result)
+		spreadsheet_id = spreadsheet_id, range = results_range, values=result)
+	print ""
 
 def add_new_files(prev_data, index, existing):
 
@@ -90,8 +78,26 @@ def add_new_files(prev_data, index, existing):
 			if not found:
 				result.append(prev_file)
 
-	return [json.dumps(result), len(result)];
+	result_count = len(result)
 
+	information_row = [''] * 9
+
+	if result_count == 1:
+		information_row = get_file_information(result[0])		
+
+	return information_row + [json.dumps(result), result_count];
+
+def get_file_information(file):
+	result = [''] * 9
+	result[0] = file['id'] + '-' + file['side'] + '.wav'
+	result[2] = file['channels']
+	result[3] = file['sample_rate']
+	result[4] = file['precision']
+	result[5] = file['duration']
+	result[6] = file['size']
+	result[7] = file['bitrate']
+	result[8] = file['encoding']
+	return result
 
 def get_service():
 	credentials = get_credentials()
@@ -192,7 +198,7 @@ def progress(count, total, status=''):
 	filled_len = int(round(bar_len * count / float(total)))
 
 	percents = round(100.0 * count / float(total), 1)
-	bar = '=' * filled_len + '-' * (bar_len - filled_len)
+	bar = '#' * filled_len + '-' * (bar_len - filled_len)
 
 	sys.stdout.write('[%s] %s%s ...%s\r' % (bar, percents, '%', status))
 	sys.stdout.flush()
