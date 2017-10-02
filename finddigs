@@ -18,11 +18,14 @@ def main():
 def find_digs():
 	
 	SPREADSHEET_ID = '1lX18yh9XkIPvJvIGQwaQNrivtHWekgOYEqDG7AhDFhs'
+	PROCESSED_FILE_PATH = './processed.csv'
+
+	# Move to Configuration Sheet
 	ID_RANGE = 'Audio Cassettes!A2:B'
 	PREV_DATA_RANGE = 'Audio Cassettes!L2:M'
 	RESULTS_RANGE = 'Audio Cassettes!C2:M'
-	PROCESSED_FILE_PATH = './processed.csv'
-
+	EXCEPTIONS_RANGE = 'Exceptions!A2:M'
+	
 	service = get_service()
 	pivot_file = get_inventory_data(
 		service = service, spreadsheet_id = SPREADSHEET_ID, 
@@ -37,12 +40,45 @@ def find_digs():
 	
 	processed_file = get_file_dictionary(PROCESSED_FILE_PATH)
 	existing_files = get_existing_files(processed_file)
-	result = process_all_file_entries(pivot_file, prev_data, existing_files)
+	results, exceptions = process_all_file_entries(pivot_file, prev_data, existing_files)
 
-	set_processed_inventory_data(
-		service = service, spreadsheet_id = SPREADSHEET_ID, 
-		range = RESULTS_RANGE, values=result
-	)	
+	# print exceptions
+
+
+	data = [	
+		{
+			'range': RESULTS_RANGE,
+			'majorDimension': 'ROWS',
+			'values': results,
+		},
+		{
+			'range': EXCEPTIONS_RANGE,
+			'majorDimension': 'ROWS',
+			'values': exceptions
+		}
+	]
+
+	# set_processed_inventory_data(
+	# 	service = service, spreadsheet_id = SPREADSHEET_ID, 
+	# 	range = RESULTS_RANGE, values=results
+	# )
+
+	set_processed_inventory_data(service, SPREADSHEET_ID, data)
+
+
+def set_processed_inventory_data(service, spreadsheet_id, data):
+	body = {
+		'data': data,
+		'valueInputOption': "RAW",		
+	}
+
+	response = service.spreadsheets().values().batchUpdate(
+		spreadsheetId = spreadsheet_id, 
+		body=body
+	).execute()
+
+	print response
+
 
 
 def process_all_file_entries(pivot_file, prev_data, existing_files):
@@ -58,17 +94,38 @@ def process_all_file_entries(pivot_file, prev_data, existing_files):
 			side = normalized_side(file[1])
 			if media_id != '':
 				key = media_id + '-' + side
-				existing = find_existing_files(existing_files, key)
+				existing = pop_existing_files(existing_files, key)
 				# check if already exists
 				result.append(add_new_files(prev_data, index, existing))
 			else:
 				result.append(blank_row)
 		else:
 			result.append(blank_row)
-		progress(index+1, pivot_file_count)
+		# progress(index+1, pivot_file_count)
 	print '\n'
+
+	# existing files has the files not included in inventory (exceptions)
+	return result, prepare_exceptions(existing_files)
+
+
+def prepare_exceptions(files):
+	result = []
+	entries = flatten_dcitionary(files)
+	for entry in entries:
+		for file in entry:
+			line = get_file_information(file)
+			name = file['id'] + '-' + file['side'] + '-' + file['dig'] + '-' + file['take'] + '.wav'
+			test = [file["path"], name]
+			
+
+			result.append(test + line)
 	return result
 
+def flatten_dcitionary(dictionary):
+	result = []
+	for key in dictionary:
+		result.append(dictionary[key])
+	return result
 
 def add_new_files(prev_data, index, existing):
 
@@ -121,15 +178,15 @@ def get_service():
 	return service
 
 
-def set_processed_inventory_data(service, spreadsheet_id, range, values):
-	body = {
-		'values': values
-	}
+# def set_processed_inventory_data(service, spreadsheet_id, range, values):
+# 	body = {
+# 		'values': values
+# 	}
 
-	service.spreadsheets().values().update(
-		spreadsheetId = spreadsheet_id, range= range, 
-		body=body, valueInputOption="RAW"
-	).execute()
+# 	service.spreadsheets().values().update(
+# 		spreadsheetId = spreadsheet_id, range= range, 
+# 		body=body, valueInputOption="RAW"
+# 	).execute()
 
 
 def get_inventory_data(service, spreadsheet_id, range):
@@ -176,11 +233,6 @@ def get_credentials():
 		print('Storing credentials to ' + credential_path)
 	return credentials
 
-
-def get_inventory_information():
-	print 'test'
-
-
 def get_file_dictionary(file_path):
 	with open(file_path) as csv_file:
 		reader = csv.DictReader(csv_file)
@@ -205,11 +257,11 @@ def normalized_side(x):
 	}.get(x.lower(), 'a')
 
 
-def find_existing_files(existing_files, key):
+def pop_existing_files(existing_files, key):
 	if key not in existing_files:
 		return []
 	else:
-		return existing_files[key]
+		return existing_files.pop(key)
 
 
 # From https://gist.github.com/vladignatyev/06860ec2040cb497f0f3
