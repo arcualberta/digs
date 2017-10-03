@@ -118,18 +118,17 @@ def process_all_file_entries(pivot_file, prev_data, existing_files):
 	blank_row = [''] * 11
 	
 	for index, file in enumerate(pivot_file):
-		if len(file) >= 2:
-			media_id = file[0]
+		file += [''] * (2 - len(file))
+		media_id = file[0]		
+		if media_id != '':
 			side = normalized_side(file[1])
-			if media_id != '':
-				key = media_id + '-' + side
-				existing = pop_existing_files(existing_files, key)
-				# check if already exists
-				result.append(add_new_files(prev_data, index, existing))
-			else:
-				result.append(blank_row)
+			key = media_id + '-' + side
+			existing = pop_existing_files(existing_files, key)
+			# check if already exists
+			result.append(add_new_files(prev_data, index, existing))
 		else:
 			result.append(blank_row)
+	
 		progress(index+1, pivot_file_count)
 	print '\n'
 
