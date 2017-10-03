@@ -101,7 +101,7 @@ def process_all_file_entries(pivot_file, prev_data, existing_files):
 				result.append(blank_row)
 		else:
 			result.append(blank_row)
-		# progress(index+1, pivot_file_count)
+		progress(index+1, pivot_file_count)
 	print '\n'
 
 	# existing files has the files not included in inventory (exceptions)
