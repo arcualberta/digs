@@ -55,7 +55,9 @@ def find_digs():
 			exceptions=exceptions
 		)
 
+		clear_exceptions(service, spreadsheet_id, EXCEPTIONS_RANGE)
 		set_processed_inventory_data(service, spreadsheet_id, data)
+
 
 def get_data(results_range, results, exceptions_range, exceptions):
 	data = [	
@@ -89,6 +91,13 @@ def get_flags():
 		flags = None
 
 	return flags
+
+def clear_exceptions(service, spreadsheet_id, exceptions_range):
+	service.spreadsheets().values().clear(
+		spreadsheetId=spreadsheet_id, 
+		range=exceptions_range,
+		body={}
+	).execute()
 
 def set_processed_inventory_data(service, spreadsheet_id, data):
 	body = {
@@ -245,7 +254,6 @@ def get_file_dictionary(file_path):
 def get_existing_files(processed_file):
 	result = {}
 	for file in processed_file:
-		# print file
 		key = file['id'] + '-' + file['side']
 		if key not in result:
 			result[key] = []
