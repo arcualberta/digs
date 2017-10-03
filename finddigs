@@ -2,10 +2,11 @@
 
 import csv
 import sys
-
 import os
 import httplib2
 import json
+import argparse
+
 from apiclient import discovery
 from oauth2client import client
 from oauth2client import tools
@@ -17,54 +18,77 @@ def main():
 
 def find_digs():
 	
-	SPREADSHEET_ID = '1lX18yh9XkIPvJvIGQwaQNrivtHWekgOYEqDG7AhDFhs'
-	PROCESSED_FILE_PATH = './processed.csv'
-
 	# Move to Configuration Sheet
 	ID_RANGE = 'Audio Cassettes!A2:B'
 	PREV_DATA_RANGE = 'Audio Cassettes!L2:M'
 	RESULTS_RANGE = 'Audio Cassettes!C2:M'
 	EXCEPTIONS_RANGE = 'Exceptions!A2:M'
-	
-	service = get_service()
-	pivot_file = get_inventory_data(
-		service = service, spreadsheet_id = SPREADSHEET_ID, 
-		range = ID_RANGE
-	)
-	# prev_data is an array of strings in json format describing files already
-	# found
-	prev_data = get_inventory_data(
-		service = service, spreadsheet_id = SPREADSHEET_ID, 
-		range = PREV_DATA_RANGE
-	)
-	
-	processed_file = get_file_dictionary(PROCESSED_FILE_PATH)
-	existing_files = get_existing_files(processed_file)
-	results, exceptions = process_all_file_entries(pivot_file, prev_data, existing_files)
 
-	# print exceptions
+	flags = get_flags()
 
+	if flags:
+		spreadsheet_id = flags.id
+		processed_file_path = flags.processed
+		
+		service = get_service(flags)
+		pivot_file = get_inventory_data(
+			service = service, spreadsheet_id = spreadsheet_id, 
+			range = ID_RANGE
+		)
+		# prev_data is an array of strings in json format describing files already
+		# found
+		prev_data = get_inventory_data(
+			service = service, spreadsheet_id = spreadsheet_id, 
+			range = PREV_DATA_RANGE
+		)
+		
+		processed_file = get_file_dictionary(processed_file_path)
+		existing_files = get_existing_files(processed_file)
+		results, exceptions = process_all_file_entries(
+								pivot_file, prev_data, existing_files
+							)
 
+		data = get_data(
+			results_range=RESULTS_RANGE, 
+			results=results,
+			exceptions_range=EXCEPTIONS_RANGE,
+			exceptions=exceptions
+		)
+
+		set_processed_inventory_data(service, spreadsheet_id, data)
+
+def get_data(results_range, results, exceptions_range, exceptions):
 	data = [	
-		{
-			'range': RESULTS_RANGE,
-			'majorDimension': 'ROWS',
-			'values': results,
-		},
-		{
-			'range': EXCEPTIONS_RANGE,
-			'majorDimension': 'ROWS',
-			'values': exceptions
-		}
-	]
+			{
+				'range': results_range,
+				'majorDimension': 'ROWS',
+				'values': results,
+			},
+			{
+				'range': exceptions_range,
+				'majorDimension': 'ROWS',
+				'values': exceptions
+			}
+		]
+	return data
 
-	# set_processed_inventory_data(
-	# 	service = service, spreadsheet_id = SPREADSHEET_ID, 
-	# 	range = RESULTS_RANGE, values=results
-	# )
+def get_flags():
+	flags = None
+	try:
+		parser = argparse.ArgumentParser(parents=[tools.argparser])
+		parser.add_argument(
+			'-i', '--id', required=True,
+			help="Id to specify which google spreadsheet to use"
+		)
+		parser.add_argument(
+			'-p', '--processed-path', dest='processed', required=True,
+			help="Path to CSV file containing digs information"
+		)
+		flags = parser.parse_args()
+	except ImportError:
+		flags = None
 
-	set_processed_inventory_data(service, SPREADSHEET_ID, data)
-
+	return flags
 
 def set_processed_inventory_data(service, spreadsheet_id, data):
 	body = {
@@ -76,10 +100,6 @@ def set_processed_inventory_data(service, spreadsheet_id, data):
 		spreadsheetId = spreadsheet_id, 
 		body=body
 	).execute()
-
-	print response
-
-
 
 def process_all_file_entries(pivot_file, prev_data, existing_files):
 	
@@ -166,8 +186,8 @@ def get_file_information(file):
 	return result
 
 
-def get_service():
-	credentials = get_credentials()
+def get_service(flags):
+	credentials = get_credentials(flags)
 	http = credentials.authorize(httplib2.Http())
 	discovery_url = ('https://sheets.googleapis.com/$discovery/rest?'
 					 'version=v4')
@@ -176,17 +196,6 @@ def get_service():
 	)
 
 	return service
-
-
-# def set_processed_inventory_data(service, spreadsheet_id, range, values):
-# 	body = {
-# 		'values': values
-# 	}
-
-# 	service.spreadsheets().values().update(
-# 		spreadsheetId = spreadsheet_id, range= range, 
-# 		body=body, valueInputOption="RAW"
-# 	).execute()
 
 
 def get_inventory_data(service, spreadsheet_id, range):
@@ -200,19 +209,13 @@ def get_inventory_data(service, spreadsheet_id, range):
 	else:
 		return values
 
+
 # from https://developers.google.com/sheets/api/quickstart/python
-def get_credentials():
+def get_credentials(flags):
 
 	SCOPES = 'https://www.googleapis.com/auth/spreadsheets'
 	CLIENT_SECRET_FILE = 'client_secret.json'
 	APPLICATION_NAME = 'Google Sheets API Python Quickstart'
-
-	try:
-	    import argparse
-	    flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
-	except ImportError:
-	    flags = None
-
 
 	home_dir = os.path.expanduser('~')
 	credential_dir = os.path.join(home_dir, '.credentials')
