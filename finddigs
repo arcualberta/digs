@@ -37,10 +37,13 @@ def find_digs():
 		)
 		# prev_data is an array of strings in json format describing files already
 		# found
-		prev_data = get_inventory_data(
-			service = service, spreadsheet_id = spreadsheet_id, 
-			range = PREV_DATA_RANGE
-		)
+
+		prev_data = []
+		if not flags.resolve:
+			prev_data = get_inventory_data(
+				service = service, spreadsheet_id = spreadsheet_id, 
+				range = PREV_DATA_RANGE
+			)
 		
 		processed_file = get_file_dictionary(processed_file_path)
 		existing_files = get_existing_files(processed_file)
@@ -60,7 +63,7 @@ def find_digs():
 
 
 def get_data(results_range, results, exceptions_range, exceptions):
-	data = [	
+	return [	
 			{
 				'range': results_range,
 				'majorDimension': 'ROWS',
@@ -72,7 +75,6 @@ def get_data(results_range, results, exceptions_range, exceptions):
 				'values': exceptions
 			}
 		]
-	return data
 
 def get_flags():
 	flags = None
@@ -86,6 +88,11 @@ def get_flags():
 			'-p', '--processed-path', dest='processed', required=True,
 			help="Path to CSV file containing digs information"
 		)
+		parser.add_argument(
+			'-r', '--resolve', action='store_true', default=False,
+			help="Recreate data row ignoring previous files"
+		)
+
 		flags = parser.parse_args()
 	except ImportError:
 		flags = None
@@ -93,6 +100,7 @@ def get_flags():
 	return flags
 
 def clear_exceptions(service, spreadsheet_id, exceptions_range):
+	# if does not exist create it
 	service.spreadsheets().values().clear(
 		spreadsheetId=spreadsheet_id, 
 		range=exceptions_range,
@@ -119,7 +127,7 @@ def process_all_file_entries(pivot_file, prev_data, existing_files):
 	
 	for index, file in enumerate(pivot_file):
 		file += [''] * (2 - len(file))
-		media_id = file[0]		
+		media_id = file[0].strip()
 		if media_id != '':
 			side = normalized_side(file[1])
 			key = media_id + '-' + side
@@ -142,7 +150,10 @@ def prepare_exceptions(files):
 	for entry in entries:
 		for file in entry:
 			line = get_file_information(file)
-			name = file['id'] + '-' + file['side'] + '-' + file['dig'] + '-' + file['take'] + '.wav'
+			name = (file['id'] + '-' 
+					+ file['side'] + '-' 
+					+ file['dig'] + '-' 
+					+ file['take'] + '.wav')
 			test = [file["path"], name]
 			
 
@@ -264,7 +275,7 @@ def normalized_side(x):
 	return {
 		'b': 'b',
 		'2': 'b',
-	}.get(x.lower(), 'a')
+	}.get(x.strip().lower(), 'a')
 
 
 def pop_existing_files(existing_files, key):
