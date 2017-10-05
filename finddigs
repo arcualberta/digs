@@ -17,50 +17,98 @@ def main():
 
 
 def find_digs():
-	
-	# Move to Configuration Sheet
-	ID_RANGE = 'Audio Cassettes!A2:B'
-	PREV_DATA_RANGE = 'Audio Cassettes!L2:M'
-	RESULTS_RANGE = 'Audio Cassettes!C2:M'
-	EXCEPTIONS_RANGE = 'Exceptions!A2:M'
-
 	flags = get_flags()
+	EXCEPTIONS_RANGE = 'Exceptions!A2:N'
 
 	if flags:
-		spreadsheet_id = flags.id
-		processed_file_path = flags.processed
-		
-		service = get_service(flags)
-		pivot_file = get_inventory_data(
+		service = get_service(flags)	
+		# work_sheet = 'Audio Cassettes'
+		work_sheets = get_work_sheets(service, flags)
+		clear_exceptions(service, flags.id, EXCEPTIONS_RANGE)		
+		for work_sheet in work_sheets:			
+			process_worksheet(flags, service, str(work_sheet[0]), EXCEPTIONS_RANGE)
+	
+
+def get_work_sheets(service, flags):
+	WORK_SHEETS_RANGE = 'Configuration!A2:A'
+	spreadsheet_id = flags.id
+	
+	result = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id, range=WORK_SHEETS_RANGE).execute()
+	return result.get('values', [])
+
+def set_worksheet_headers(service, flags, work_sheet):
+	headers = [
+		['Digitized file name'],
+		['Digitization notes'],
+		['Channels'],
+		['Sample rate'],
+		['Precision'],
+		['Duration HH:MM:SS'],
+		['Size'],
+		['Bit rate'],
+		['Encoding'],
+		['Data'],
+		['File count']
+	]
+
+	body = {
+		'values': headers,
+		'majorDimension': 'COLUMNS'
+	}
+
+	range = work_sheet + '!C1:M1'
+
+	response = service.spreadsheets().values().update(
+		spreadsheetId = flags.id,
+		range = range,
+		body = body,
+		valueInputOption = 'RAW',		
+	).execute()
+
+def process_worksheet(flags, service, work_sheet, exceptions_range):
+
+	# EXCEPTIONS_RANGE = 'Exceptions!A2:M'
+	ID_RANGE = work_sheet + '!A2:B'
+	PREV_DATA_RANGE = work_sheet + '!L2:M'
+	RESULTS_RANGE = work_sheet + '!C2:M'
+	spreadsheet_id = flags.id
+	processed_file_path = flags.processed
+
+	set_worksheet_headers(service, flags, work_sheet)
+
+	pivot_file = get_inventory_data(
+		service = service, spreadsheet_id = spreadsheet_id, 
+		range = ID_RANGE
+	)
+
+	# prev_data is an array of strings in json format describing 
+	# files already found
+
+	prev_data = []
+	if not flags.resolve:
+		prev_data = get_inventory_data(
 			service = service, spreadsheet_id = spreadsheet_id, 
-			range = ID_RANGE
+			range = PREV_DATA_RANGE
 		)
-		# prev_data is an array of strings in json format describing files already
-		# found
+	
+	processed_file = get_file_dictionary(processed_file_path)
+	existing_files = get_existing_files(processed_file)
+	results, exceptions = process_all_file_entries(
+							work_sheet, pivot_file, prev_data, existing_files
+						)
 
-		prev_data = []
-		if not flags.resolve:
-			prev_data = get_inventory_data(
-				service = service, spreadsheet_id = spreadsheet_id, 
-				range = PREV_DATA_RANGE
-			)
-		
-		processed_file = get_file_dictionary(processed_file_path)
-		existing_files = get_existing_files(processed_file)
-		results, exceptions = process_all_file_entries(
-								pivot_file, prev_data, existing_files
-							)
+	data = get_data(
+		results_range=RESULTS_RANGE, 
+		results=results,
+		exceptions_range=exceptions_range,
+		exceptions=exceptions
+	)
 
-		data = get_data(
-			results_range=RESULTS_RANGE, 
-			results=results,
-			exceptions_range=EXCEPTIONS_RANGE,
-			exceptions=exceptions
-		)
+	#XXX switch vs clear exceptions and add exception based on flag
 
-		clear_exceptions(service, spreadsheet_id, EXCEPTIONS_RANGE)
-		set_processed_inventory_data(service, spreadsheet_id, data)
-
+	# clear_exceptions(service, spreadsheet_id, EXCEPTIONS_RANGE)
+	set_processed_inventory_data(service, spreadsheet_id, data)
 
 def get_data(results_range, results, exceptions_range, exceptions):
 	return [	
@@ -108,21 +156,29 @@ def clear_exceptions(service, spreadsheet_id, exceptions_range):
 	).execute()
 
 def set_processed_inventory_data(service, spreadsheet_id, data):
-	body = {
-		'data': data,
-		'valueInputOption': "RAW",		
-	}
 
-	response = service.spreadsheets().values().batchUpdate(
-		spreadsheetId = spreadsheet_id, 
-		body=body
+	results = data[0]
+	exceptions = data[1]
+
+	service.spreadsheets().values().update(
+		spreadsheetId = spreadsheet_id,
+		range = results['range'],
+		body = {'values': results['values']},
+		valueInputOption = 'RAW'
 	).execute()
 
-def process_all_file_entries(pivot_file, prev_data, existing_files):
+	service.spreadsheets().values().append(
+		spreadsheetId = spreadsheet_id,
+		range = exceptions['range'],
+		body = {'values': exceptions['values']},
+		valueInputOption = 'RAW'
+	).execute()
+
+def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
 	
 	result = []
 	pivot_file_count = len(pivot_file)
-	progress(0, pivot_file_count)
+	progress(0, pivot_file_count, work_sheet)
 	blank_row = [''] * 11
 	
 	for index, file in enumerate(pivot_file):
@@ -137,14 +193,14 @@ def process_all_file_entries(pivot_file, prev_data, existing_files):
 		else:
 			result.append(blank_row)
 	
-		progress(index+1, pivot_file_count)
+		progress(index+1, pivot_file_count, work_sheet)
 	print '\n'
 
-	# existing files has the files not included in inventory (exceptions)
-	return result, prepare_exceptions(existing_files)
+	# existing_files has files not included in inventory (exceptions)
+	return result, prepare_exceptions(work_sheet, existing_files)
 
 
-def prepare_exceptions(files):
+def prepare_exceptions(work_sheet, files):
 	result = []
 	entries = flatten_dcitionary(files)
 	for entry in entries:
@@ -154,10 +210,10 @@ def prepare_exceptions(files):
 					+ file['side'] + '-' 
 					+ file['dig'] + '-' 
 					+ file['take'] + '.wav')
-			test = [file["path"], name]
+			to_append = [work_sheet, file["path"], name]
 			
 
-			result.append(test + line)
+			result.append(to_append + line)
 	return result
 
 def flatten_dcitionary(dictionary):
@@ -195,6 +251,7 @@ def add_new_files(prev_data, index, existing):
 def get_file_information(file):
 	result = [''] * 9
 	result[0] = file['id'] + '-' + file['side'] + '.wav'
+	result[1] = file['notes']
 	result[2] = file['channels']
 	result[3] = file['sample_rate']
 	result[4] = file['precision']
