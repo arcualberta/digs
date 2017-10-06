@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 from os import path
 import sys
 # import argparse
@@ -10,6 +11,8 @@ import csv
 import sox
 import subprocess
 import hashlib
+from tqdm import tqdm
+
 
 def main():
 
@@ -42,14 +45,16 @@ def main():
 	file_pattern = re.compile('^(?:.+/)(.+?)-([ab])-(d\d+)-(t\d+)(?:-(.+))?.wav$')
 	for this_path in paths:
 		file_paths = glob.glob(this_path + '/*')
-		for file_path in file_paths:			
+		for file_path in tqdm(file_paths):
 			m = file_pattern.match(file_path)
 			if m:				
 				file_entry = get_file_information(file_path, m)
 				csv_writer.writerow(file_entry)
 
+
 def get_soxi_line(reg, input):
 	return re.sub(reg, '', input) 
+
 
 def get_file_intrinsic_information(file_path):
 	info_line = re.compile('(.*?):(.+)')
@@ -91,6 +96,7 @@ def md5(fname):
 			hash_md5.update(chunk)
 	return hash_md5.hexdigest()
 
+
 def get_file_information(file_path, m):
 	# test = sox.file_info.info(file_path)
 	
@@ -100,6 +106,7 @@ def get_file_information(file_path, m):
 	result = dict(file_intrinsic_information, **file_file_extrinsic_information)
 
 	return result
+
 
 # from https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
 def get_size(num, suffix='B'):
