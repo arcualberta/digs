@@ -6,11 +6,11 @@ import os
 import httplib2
 import json
 import argparse
-
 from apiclient import discovery
 from oauth2client import client
 from oauth2client import tools
 from oauth2client.file import Storage
+from tqdm import tqdm
 
 def main():	
 	find_digs()
@@ -25,8 +25,11 @@ def find_digs():
 		# work_sheet = 'Audio Cassettes'
 		work_sheets = get_work_sheets(service, flags)
 		clear_exceptions(service, flags.id, EXCEPTIONS_RANGE)		
-		for work_sheet in work_sheets:			
+		progress = tqdm(work_sheets)
+		progress.set_description('Work sheets')
+		for work_sheet in progress:
 			process_worksheet(flags, service, str(work_sheet[0]), EXCEPTIONS_RANGE)
+		print '\n'
 	
 
 def get_work_sheets(service, flags):
@@ -36,6 +39,7 @@ def get_work_sheets(service, flags):
 	result = service.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id, range=WORK_SHEETS_RANGE).execute()
 	return result.get('values', [])
+
 
 def set_worksheet_headers(service, flags, work_sheet):
 	headers = [
@@ -65,6 +69,7 @@ def set_worksheet_headers(service, flags, work_sheet):
 		body = body,
 		valueInputOption = 'RAW',		
 	).execute()
+
 
 def process_worksheet(flags, service, work_sheet, exceptions_range):
 
@@ -110,6 +115,7 @@ def process_worksheet(flags, service, work_sheet, exceptions_range):
 	# clear_exceptions(service, spreadsheet_id, EXCEPTIONS_RANGE)
 	set_processed_inventory_data(service, spreadsheet_id, data)
 
+
 def get_data(results_range, results, exceptions_range, exceptions):
 	return [	
 			{
@@ -123,6 +129,7 @@ def get_data(results_range, results, exceptions_range, exceptions):
 				'values': exceptions
 			}
 		]
+
 
 def get_flags():
 	flags = None
@@ -147,6 +154,7 @@ def get_flags():
 
 	return flags
 
+
 def clear_exceptions(service, spreadsheet_id, exceptions_range):
 	# if does not exist create it
 	service.spreadsheets().values().clear(
@@ -154,6 +162,7 @@ def clear_exceptions(service, spreadsheet_id, exceptions_range):
 		range=exceptions_range,
 		body={}
 	).execute()
+
 
 def set_processed_inventory_data(service, spreadsheet_id, data):
 
@@ -174,14 +183,17 @@ def set_processed_inventory_data(service, spreadsheet_id, data):
 		valueInputOption = 'RAW'
 	).execute()
 
+
 def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
 	
 	result = []
 	pivot_file_count = len(pivot_file)
-	progress(0, pivot_file_count, work_sheet)
 	blank_row = [''] * 11
 	
-	for index, file in enumerate(pivot_file):
+	test = tqdm(pivot_file)
+
+	for index, file in enumerate(test):
+		test.set_description(work_sheet)
 		file += [''] * (2 - len(file))
 		media_id = file[0].strip()
 		if media_id != '':
@@ -191,12 +203,7 @@ def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
 			# check if already exists
 			result.append(add_new_files(prev_data, index, existing))
 		else:
-			result.append(blank_row)
-	
-		progress(index+1, pivot_file_count, work_sheet)
-	print '\n'
-
-	# existing_files has files not included in inventory (exceptions)
+			result.append(blank_row)	
 	return result, prepare_exceptions(work_sheet, existing_files)
 
 
@@ -216,11 +223,13 @@ def prepare_exceptions(work_sheet, files):
 			result.append(to_append + line)
 	return result
 
+
 def flatten_dcitionary(dictionary):
 	result = []
 	for key in dictionary:
 		result.append(dictionary[key])
 	return result
+
 
 def add_new_files(prev_data, index, existing):
 
@@ -312,6 +321,7 @@ def get_credentials(flags):
 		print('Storing credentials to ' + credential_path)
 	return credentials
 
+
 def get_file_dictionary(file_path):
 	with open(file_path) as csv_file:
 		reader = csv.DictReader(csv_file)
@@ -340,18 +350,6 @@ def pop_existing_files(existing_files, key):
 		return []
 	else:
 		return existing_files.pop(key)
-
-
-# From https://gist.github.com/vladignatyev/06860ec2040cb497f0f3
-def progress(count, total, status=''):
-	bar_len = 60
-	filled_len = int(round(bar_len * count / float(total)))
-
-	percents = round(100.0 * count / float(total), 1)
-	bar = '#' * filled_len + '-' * (bar_len - filled_len)
-
-	sys.stdout.write('[%s] %s%s ...%s\r' % (bar, percents, '%', status))
-	sys.stdout.flush()
 
 
 if __name__ == '__main__':
