@@ -209,7 +209,7 @@ def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
 
 def prepare_exceptions(work_sheet, files):
 	result = []
-	entries = flatten_dcitionary(files)
+	entries = flatten_dictionary(files)
 	for entry in entries:
 		for file in entry:
 			line = get_file_information(file)
@@ -224,7 +224,7 @@ def prepare_exceptions(work_sheet, files):
 	return result
 
 
-def flatten_dcitionary(dictionary):
+def flatten_dictionary(dictionary):
 	result = []
 	for key in dictionary:
 		result.append(dictionary[key])
