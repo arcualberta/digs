@@ -19,12 +19,13 @@ def main():
 def find_digs():
 	flags = get_flags()
 	EXCEPTIONS_RANGE = 'Exceptions!A2:N'
+	REPORT_RANGE = 'Report!A2:E'
 
 	if flags:
 		service = get_service(flags)	
 		# work_sheet = 'Audio Cassettes'
 		work_sheets = get_work_sheets(service, flags)
-		clear_exceptions(service, flags.id, EXCEPTIONS_RANGE)		
+		clear_exceptions(service, flags.id, EXCEPTIONS_RANGE, REPORT_RANGE)
 		progress = tqdm(work_sheets)
 		progress.set_description('Work sheets')
 		for work_sheet in progress:
@@ -99,7 +100,7 @@ def process_worksheet(flags, service, work_sheet, exceptions_range):
 	
 	processed_file = get_file_dictionary(processed_file_path)
 	existing_files = get_existing_files(processed_file)
-	results, exceptions = process_all_file_entries(
+	results, exceptions, report = process_all_file_entries(
 							work_sheet, pivot_file, prev_data, existing_files
 						)
 
@@ -107,7 +108,9 @@ def process_worksheet(flags, service, work_sheet, exceptions_range):
 		results_range=RESULTS_RANGE, 
 		results=results,
 		exceptions_range=exceptions_range,
-		exceptions=exceptions
+		exceptions=exceptions,
+		report_range='Report!A2:E',
+		report=report
 	)
 
 	#XXX switch vs clear exceptions and add exception based on flag
@@ -116,7 +119,7 @@ def process_worksheet(flags, service, work_sheet, exceptions_range):
 	set_processed_inventory_data(service, spreadsheet_id, data)
 
 
-def get_data(results_range, results, exceptions_range, exceptions):
+def get_data(results_range, results, exceptions_range, exceptions, report_range, report):
 	return [	
 			{
 				'range': results_range,
@@ -127,6 +130,10 @@ def get_data(results_range, results, exceptions_range, exceptions):
 				'range': exceptions_range,
 				'majorDimension': 'ROWS',
 				'values': exceptions
+			},{
+				'range': report_range,
+				'majorDimension': 'ROWS',
+				'values': report
 			}
 		]
 
@@ -155,7 +162,7 @@ def get_flags():
 	return flags
 
 
-def clear_exceptions(service, spreadsheet_id, exceptions_range):
+def clear_exceptions(service, spreadsheet_id, exceptions_range, report_range):
 	# if does not exist create it
 	service.spreadsheets().values().clear(
 		spreadsheetId=spreadsheet_id, 
@@ -163,24 +170,38 @@ def clear_exceptions(service, spreadsheet_id, exceptions_range):
 		body={}
 	).execute()
 
+	service.spreadsheets().values().clear(
+		spreadsheetId=spreadsheet_id, 
+		range=report_range,
+		body={}
+	).execute()
 
 def set_processed_inventory_data(service, spreadsheet_id, data):
 
 	results = data[0]
 	exceptions = data[1]
+	report = data[2]
 
 	service.spreadsheets().values().update(
 		spreadsheetId = spreadsheet_id,
 		range = results['range'],
 		body = {'values': results['values']},
-		valueInputOption = 'RAW'
+		valueInputOption = 'USER_ENTERED'
 	).execute()
 
 	service.spreadsheets().values().append(
 		spreadsheetId = spreadsheet_id,
 		range = exceptions['range'],
 		body = {'values': exceptions['values']},
-		valueInputOption = 'RAW'
+		valueInputOption = 'USER_ENTERED'
+	).execute()
+
+	service.spreadsheets().values().append(
+		spreadsheetId = spreadsheet_id,
+		range = report['range'],
+		# XXX Fixme, should not have to add list
+		body = {'values': [report['values']]},
+		valueInputOption = 'USER_ENTERED'
 	).execute()
 
 
@@ -190,10 +211,10 @@ def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
 	pivot_file_count = len(pivot_file)
 	blank_row = [''] * 11
 	
-	test = tqdm(pivot_file)
+	tqdmIterator = tqdm(pivot_file)
 
-	for index, file in enumerate(test):
-		test.set_description(work_sheet)
+	for index, file in enumerate(tqdmIterator):
+		tqdmIterator.set_description(work_sheet)
 		file += [''] * (2 - len(file))
 		media_id = file[0].strip()
 		if media_id != '':
@@ -204,8 +225,68 @@ def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
 			result.append(add_new_files(prev_data, index, existing))
 		else:
 			result.append(blank_row)	
-	return result, prepare_exceptions(work_sheet, existing_files)
 
+	# generate reports
+
+	report = generate_report(work_sheet, result)
+	exceptions = prepare_exceptions(work_sheet, existing_files)
+	return result, exceptions, report
+
+def generate_report(work_sheet, data):
+	# Total files, passing files
+	total_files = 0
+	passing_files = 0	
+	total_time = 0
+	average_time = 0
+	for datum in data:		
+		total_files += 1
+		if is_passing_file(datum):
+			passing_files += 1
+
+			total_time += get_seconds(datum[5])
+		# print datum
+	
+
+	return [
+		work_sheet,
+		# all inventory files
+		total_files,
+		# files with no detectable error
+		passing_files,
+		# all digitized time
+		get_duration_from_seconds(total_time),
+		# average time per recording
+		get_duration_from_seconds(total_time / passing_files)
+	]
+
+def get_duration_from_seconds(total_seconds):
+	hours, minutes = divmod(total_seconds, 60*60)
+	minutes, seconds = divmod(minutes, 60)
+	return "{0:02d}".format(int(hours)) + ":" + "{0:02d}".format(int(minutes)) + ":" + "{0:02.2f}".format(seconds)
+
+
+def get_seconds(time):
+	# 01:05:45.18
+	parts = time.split(':')	
+	seconds = float(parts[2])
+	seconds += float(parts[1]) * 60
+	seconds += float(parts[0]) * 60 * 60
+	return seconds
+
+def is_passing_file(datum):
+	blank_row = ['', '', '', '', '', '', '', '', '', '[]', 0]
+	# check expected values
+	if (datum == blank_row or 
+		datum[2] != '2' or
+		datum[3] != '96000' or
+		datum[4] != '24-bit' or
+		datum[7] != '4.61M' or
+		datum[8] != '24-bit Signed Integer PCM' or
+		datum[10] != 1
+		):
+		return False
+
+	return True
 
 def prepare_exceptions(work_sheet, files):
 	result = []
