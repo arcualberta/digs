@@ -54,7 +54,8 @@ def set_worksheet_headers(service, flags, work_sheet):
 		['Bit rate'],
 		['Encoding'],
 		['Data'],
-		['File count']
+		['File count'],
+		['Repeating MD5']
 	]
 
 	body = {
@@ -62,7 +63,7 @@ def set_worksheet_headers(service, flags, work_sheet):
 		'majorDimension': 'COLUMNS'
 	}
 
-	range = work_sheet + '!C1:M1'
+	range = work_sheet + '!C1:N1'
 
 	response = service.spreadsheets().values().update(
 		spreadsheetId = flags.id,
@@ -77,7 +78,7 @@ def process_worksheet(flags, service, work_sheet, exceptions_range):
 	# EXCEPTIONS_RANGE = 'Exceptions!A2:M'
 	ID_RANGE = work_sheet + '!A2:B'
 	PREV_DATA_RANGE = work_sheet + '!L2:M'
-	RESULTS_RANGE = work_sheet + '!C2:M'
+	RESULTS_RANGE = work_sheet + '!C2:N'
 	spreadsheet_id = flags.id
 	processed_file_path = flags.processed
 
@@ -331,11 +332,21 @@ def add_new_files(prev_data, index, existing):
 	result_count = len(result)
 
 	information_row = [''] * 9
-
+	matching_md5 = ""
 	if result_count == 1:
 		information_row = get_file_information(result[0])		
+	elif result_count > 1:		
+		for index, file_info in enumerate(result):
+			scout_index = index + 1
+			this_md5 = file_info["md5"]
+			while scout_index < len(result):
+				if this_md5 == result[scout_index]["md5"]:
+					matching_md5 = this_md5
+					break
+				scout_index += 1
+		print result		
 
-	return information_row + [json.dumps(result), result_count];
+	return information_row + [json.dumps(result), result_count, matching_md5];
 
 
 def get_file_information(file):
