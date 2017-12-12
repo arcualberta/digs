@@ -344,7 +344,7 @@ def add_new_files(prev_data, index, existing):
 					matching_md5 = this_md5
 					break
 				scout_index += 1
-		print result		
+		
 
 	return information_row + [json.dumps(result), result_count, matching_md5];
 
