@@ -12,7 +12,7 @@ from oauth2client import tools
 from oauth2client.file import Storage
 from tqdm import tqdm
 
-def main():	
+def main():
 	find_digs()
 
 
@@ -22,7 +22,7 @@ def find_digs():
 	REPORT_RANGE = 'Report!A2:E'
 
 	if flags:
-		service = get_service(flags)	
+		service = get_service(flags)
 		# work_sheet = 'Audio Cassettes'
 		work_sheets = get_work_sheets(service, flags)
 		clear_exceptions(service, flags.id, EXCEPTIONS_RANGE, REPORT_RANGE)
@@ -31,12 +31,12 @@ def find_digs():
 		for work_sheet in progress:
 			process_worksheet(flags, service, str(work_sheet[0]), EXCEPTIONS_RANGE)
 		print '\n'
-	
+
 
 def get_work_sheets(service, flags):
 	WORK_SHEETS_RANGE = 'Configuration!A2:A'
 	spreadsheet_id = flags.id
-	
+
 	result = service.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id, range=WORK_SHEETS_RANGE).execute()
 	return result.get('values', [])
@@ -69,7 +69,7 @@ def set_worksheet_headers(service, flags, work_sheet):
 		spreadsheetId = flags.id,
 		range = range,
 		body = body,
-		valueInputOption = 'RAW',		
+		valueInputOption = 'RAW',
 	).execute()
 
 
@@ -85,20 +85,20 @@ def process_worksheet(flags, service, work_sheet, exceptions_range):
 	set_worksheet_headers(service, flags, work_sheet)
 
 	pivot_file = get_inventory_data(
-		service = service, spreadsheet_id = spreadsheet_id, 
+		service = service, spreadsheet_id = spreadsheet_id,
 		range = ID_RANGE
 	)
 
-	# prev_data is an array of strings in json format describing 
+	# prev_data is an array of strings in json format describing
 	# files already found
 
 	prev_data = []
 	if not flags.resolve:
 		prev_data = get_inventory_data(
-			service = service, spreadsheet_id = spreadsheet_id, 
+			service = service, spreadsheet_id = spreadsheet_id,
 			range = PREV_DATA_RANGE
 		)
-	
+
 	processed_file = get_file_dictionary(processed_file_path)
 	existing_files = get_existing_files(processed_file)
 	results, exceptions, report = process_all_file_entries(
@@ -106,7 +106,7 @@ def process_worksheet(flags, service, work_sheet, exceptions_range):
 						)
 
 	data = get_data(
-		results_range=RESULTS_RANGE, 
+		results_range=RESULTS_RANGE,
 		results=results,
 		exceptions_range=exceptions_range,
 		exceptions=exceptions,
@@ -121,7 +121,7 @@ def process_worksheet(flags, service, work_sheet, exceptions_range):
 
 
 def get_data(results_range, results, exceptions_range, exceptions, report_range, report):
-	return [	
+	return [
 			{
 				'range': results_range,
 				'majorDimension': 'ROWS',
@@ -166,13 +166,13 @@ def get_flags():
 def clear_exceptions(service, spreadsheet_id, exceptions_range, report_range):
 	# if does not exist create it
 	service.spreadsheets().values().clear(
-		spreadsheetId=spreadsheet_id, 
+		spreadsheetId=spreadsheet_id,
 		range=exceptions_range,
 		body={}
 	).execute()
 
 	service.spreadsheets().values().clear(
-		spreadsheetId=spreadsheet_id, 
+		spreadsheetId=spreadsheet_id,
 		range=report_range,
 		body={}
 	).execute()
@@ -207,11 +207,11 @@ def set_processed_inventory_data(service, spreadsheet_id, data):
 
 
 def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
-	
+
 	result = []
 	pivot_file_count = len(pivot_file)
 	blank_row = [''] * 11
-	
+
 	tqdmIterator = tqdm(pivot_file)
 
 	for index, file in enumerate(tqdmIterator):
@@ -225,7 +225,7 @@ def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
 			# check if already exists
 			result.append(add_new_files(prev_data, index, existing))
 		else:
-			result.append(blank_row)	
+			result.append(blank_row)
 
 	# generate reports
 
@@ -236,17 +236,17 @@ def process_all_file_entries(work_sheet, pivot_file, prev_data, existing_files):
 def generate_report(work_sheet, data):
 	# Total files, passing files
 	total_files = 0
-	passing_files = 0	
+	passing_files = 0
 	total_time = 0
 	average_time = 0
-	for datum in data:		
+	for datum in data:
 		total_files += 1
 		if is_passing_file(datum):
 			passing_files += 1
 
 			total_time += get_seconds(datum[5])
 		# print datum
-	
+
 
 	return [
 		work_sheet,
@@ -268,7 +268,7 @@ def get_duration_from_seconds(total_seconds):
 
 def get_seconds(time):
 	# 01:05:45.18
-	parts = time.split(':')	
+	parts = time.split(':')
 	seconds = float(parts[2])
 	seconds += float(parts[1]) * 60
 	seconds += float(parts[0]) * 60 * 60
@@ -277,7 +277,7 @@ def get_seconds(time):
 def is_passing_file(datum):
 	blank_row = ['', '', '', '', '', '', '', '', '', '[]', 0]
 	# check expected values
-	if (datum == blank_row or 
+	if (datum == blank_row or
 		datum[2] != '2' or
 		datum[3] != '96000' or
 		datum[4] != '24-bit' or
@@ -295,12 +295,12 @@ def prepare_exceptions(work_sheet, files):
 	for entry in entries:
 		for file in entry:
 			line = get_file_information(file)
-			name = (file['id'] + '-' 
-					+ file['side'] + '-' 
-					+ file['dig'] + '-' 
+			name = (file['id'] + '-'
+					+ file['side'] + '-'
+					+ file['dig'] + '-'
 					+ file['take'] + '.wav')
 			to_append = [work_sheet, file["path"], name]
-			
+
 
 			result.append(to_append + line)
 	return result
@@ -334,8 +334,8 @@ def add_new_files(prev_data, index, existing):
 	information_row = [''] * 9
 	matching_md5 = ""
 	if result_count == 1:
-		information_row = get_file_information(result[0])		
-	elif result_count > 1:		
+		information_row = get_file_information(result[0])
+	elif result_count > 1:
 		for index, file_info in enumerate(result):
 			scout_index = index + 1
 			this_md5 = file_info["md5"]
@@ -344,7 +344,7 @@ def add_new_files(prev_data, index, existing):
 					matching_md5 = this_md5
 					break
 				scout_index += 1
-		
+
 
 	return information_row + [json.dumps(result), result_count, matching_md5];
 
@@ -423,10 +423,13 @@ def get_file_dictionary(file_path):
 def get_existing_files(processed_file):
 	result = {}
 	for file in processed_file:
-		key = file['id'] + '-' + file['side']
-		if key not in result:
-			result[key] = []
-		result[key].append(file)
+		if file['id'] != None and file['side'] != None:
+			key = file['id'] + '-' + file['side']
+			if key not in result:
+				result[key] = []
+			result[key].append(file)
+		else:
+			print file
 	return result
 
 

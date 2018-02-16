@@ -61,14 +61,19 @@ def get_file_intrinsic_information(file_path):
 	output = subprocess.check_output(['soxi', file_path]).split("\n")
 	replace_header = re.compile('.*?: ')
 
-	result = {
-		'channels': get_soxi_line(replace_header, output[2]), #channels
-		'sample_rate': get_soxi_line(replace_header, output[3]), #sample rate
-		'precision': get_soxi_line(replace_header, output[4]), #precision
-		'duration': re.sub('\s=.+$', '', get_soxi_line(replace_header, output[5])), #duration
-		'bitrate': get_soxi_line(replace_header, output[7]), #bit rate
-		'encoding': get_soxi_line(replace_header, output[8]) #encoding
-	}
+	result = {}
+
+	if len(output) >= 9:
+		result = {
+			'channels': get_soxi_line(replace_header, output[2]), #channels
+			'sample_rate': get_soxi_line(replace_header, output[3]), #sample rate
+			'precision': get_soxi_line(replace_header, output[4]), #precision
+			'duration': re.sub('\s=.+$', '', get_soxi_line(replace_header, output[5])), #duration
+			'bitrate': get_soxi_line(replace_header, output[7]), #bit rate
+			'encoding': get_soxi_line(replace_header, output[8]) #encoding
+		}
+	else:
+		print file_path
 	return result
 
 
