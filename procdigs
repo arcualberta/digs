@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-from os import path
 import sys
-# import argparse
 import glob
 import re
 import wave
@@ -11,6 +9,7 @@ import csv
 import sox
 import subprocess
 import hashlib
+from os import path
 from tqdm import tqdm
 
 
@@ -42,13 +41,12 @@ def main():
 
 	csv_writer = csv.DictWriter(sys.stdout, fieldnames = fieldnames, quoting=csv.QUOTE_MINIMAL)
 	csv_writer.writeheader()
-	file_pattern = re.compile('^(?:.+/)(.+?)-([ab])-(d\d+)-(t\d+)(?:-(.+))?.wav$')
+
 	for this_path in paths:
-		file_paths = glob.glob(this_path + '/*')
+		file_paths = glob.glob(this_path + '/*.wav')
 		for file_path in tqdm(file_paths):
-			m = file_pattern.match(file_path)
-			if m:				
-				file_entry = get_file_information(file_path, m)
+			file_entries = get_file_information(file_path)
+			for file_entry in file_entries:
 				csv_writer.writerow(file_entry)
 
 
@@ -73,22 +71,35 @@ def get_file_intrinsic_information(file_path):
 			'encoding': get_soxi_line(replace_header, output[8]) #encoding
 		}
 	else:
-		print file_path
+		print "ERROR: " + file_path
 	return result
 
 
-def get_file_extrinsic_information(file_path, m):
-	file_entry = {
-		'path': path.abspath(file_path),
-		'id': m.group(1),
-		'side': m.group(2),
-		'dig': m.group(3),
-		'take': m.group(4),
-		'notes': m.group(5),	
-		'updated at (UTC)': time.strftime("%d %b %Y %H:%M:%S", time.gmtime(path.getmtime(file_path))),
-		'size': get_size(path.getsize(file_path)),
-		'md5': md5(file_path)
-	}
+def get_file_extrinsic_information(file_path):	
+	# regular expression: (path) (id) (side) (digg unit) (take) (notes)
+	m = re.match('^(?:.+/)(.+?)-([ab])-(d\d+)-(t\d+)(?:-(.+))?.wav$', file_path)
+	file_entry = {}
+	if m:
+		file_entry = {
+			'path': path.abspath(file_path),
+			'id': m.group(1),
+			'side': m.group(2),
+			'dig': m.group(3),
+			'take': m.group(4),
+			'notes': m.group(5),	
+			'updated at (UTC)': time.strftime("%d %b %Y %H:%M:%S", time.gmtime(path.getmtime(file_path))),
+			'size': get_size(path.getsize(file_path)),
+			'md5': md5(file_path)
+		}
+	else :
+		file_name_regex = re.match('^(?:.+/)(.+?).wav$', file_path)
+		file_entry = {
+			'path': path.abspath(file_path),
+			'id': file_name_regex.group(1),
+			'updated at (UTC)': time.strftime("%d %b %Y %H:%M:%S", time.gmtime(path.getmtime(file_path))),
+			'size': get_size(path.getsize(file_path)),
+			'md5': md5(file_path)
+		}
 
 	return file_entry
 
@@ -102,13 +113,19 @@ def md5(fname):
 	return hash_md5.hexdigest()
 
 
-def get_file_information(file_path, m):
-	# test = sox.file_info.info(file_path)
-	
-	file_file_extrinsic_information = get_file_extrinsic_information(file_path, m)
+def get_file_information(file_path):
+	result = []
+	file_extrinsic_information = get_file_extrinsic_information(file_path)
 	file_intrinsic_information = get_file_intrinsic_information(file_path)
+	
+	# split file_extrinsic_information id by special character "_" and 
+	# enter each id modified in the result
+	ids = file_extrinsic_information['id'].split('_')
 
-	result = dict(file_intrinsic_information, **file_file_extrinsic_information)
+	for id in ids:
+		result_line = dict(file_intrinsic_information, **file_extrinsic_information)
+		result_line['id'] = id
+		result.append(result_line)
 
 	return result
 

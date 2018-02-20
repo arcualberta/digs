@@ -351,7 +351,8 @@ def add_new_files(prev_data, index, existing):
 
 def get_file_information(file):
 	result = [''] * 9
-	result[0] = file['id'] + '-' + file['side'] + '.wav'
+	# XXX Do not generate filename
+	result[0] = file['path']
 	result[1] = file['notes']
 	result[2] = file['channels']
 	result[3] = file['sample_rate']
