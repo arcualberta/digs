@@ -11,13 +11,14 @@ import subprocess
 import hashlib
 from os import path
 from tqdm import tqdm
+from multiprocessing import Pool
 
 
 def main():
 
-	paths = ['./']
+	path = './'
 	if len(sys.argv) > 1:
-		paths = sys.argv[1:]
+		path = sys.argv[1]
 
 	fieldnames = [
 		'path',
@@ -42,13 +43,19 @@ def main():
 	csv_writer = csv.DictWriter(sys.stdout, fieldnames = fieldnames, quoting=csv.QUOTE_MINIMAL)
 	csv_writer.writeheader()
 
-	for this_path in paths:
-		file_paths = glob.glob(this_path + '/*.wav')
-		for file_path in tqdm(file_paths):
-			file_entries = get_file_information(file_path)
-			for file_entry in file_entries:
-				csv_writer.writerow(file_entry)
-
+	# for this_path in paths:
+	# 	file_paths = glob.glob(this_path + '/*.wav')
+	# 	for file_path in tqdm(file_paths):
+	# 		file_entries = get_file_information(file_path)
+	# 		for file_entry in file_entries:
+	# 			csv_writer.writerow(file_entry)
+	file_paths = glob.glob(path + '/*.wav')
+		
+	pool = Pool(8)
+	file_entries = list(tqdm(pool.imap(get_file_information, file_paths), total=len(file_paths)))
+	# csv_writer.writerows(file_entries)
+	for file_entry in file_entries:
+		csv_writer.writerow(file_entry)
 
 def get_soxi_line(reg, input):
 	return re.sub(reg, '', input) 
