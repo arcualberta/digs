@@ -39,21 +39,29 @@ def main():
 	]
 
 	csv_writer = csv.DictWriter(sys.stdout, fieldnames = fieldnames, quoting=csv.QUOTE_MINIMAL)
-	csv_writer.writeheader()	
+	csv_writer.writeheader()
+
+	# for this_path in paths:
+	# 	file_paths = glob.glob(this_path + '/*.wav')
+	# 	for file_path in tqdm(file_paths):
+	# 		file_entries = get_file_information(file_path)
+	# 		for file_entry in file_entries:
+	# 			csv_writer.writerow(file_entry)
 	file_paths = glob.glob(path + '/*.wav')
 
 	pool = Pool(8)
 	file_entries = list(tqdm(pool.imap(get_file_information, file_paths), total=len(file_paths)))
 	# csv_writer.writerows(file_entries)
-	for file_entry in file_entries:
+	for file_entry in file_entries:		
 		csv_writer.writerows(file_entry)
+		# for entry in file_entry:
+		# 	csv_writer.writerow(entry)
 
-
-def get_soxi_line(reg, input):
-	return re.sub(reg, '', input)
+# def get_soxi_line(reg, input):
+# 	return re.sub(reg, '', input)
 
 def soxi_get(file_path, flag):
-	return subprocess.check_output(['soxi', flag, file_path])
+	return subprocess.check_output(['soxi', flag, file_path]).strip(" \n\t\r")
 
 def soxi_get_channels(file_path):
 	return soxi_get(file_path, '-c')
@@ -73,7 +81,9 @@ def soxi_get_bitrate(file_path):
 def soxi_get_encoding(file_path):
 	return soxi_get(file_path, '-e')
 
-def get_file_intrinsic_information(file_path):	
+def get_file_intrinsic_information(file_path):
+	# file_info = sox.file_info.info(file_path)
+	# {'channels': 2, 'sample_rate': 96000.0, 'bitrate': 24, 'duration': 5822.848, 'num_samples': 558993408, 'encoding': 'Signed Integer PCM', 'silent': False}
 	result = {
 		'channels': soxi_get_channels(file_path),
 		'sample_rate': soxi_get_sample_rate(file_path),
@@ -85,9 +95,29 @@ def get_file_intrinsic_information(file_path):
 
 	return result;
 
+	# info_line = re.compile('(.*?):(.+)')
+	# output = subprocess.check_output(['soxi', file_path]).split("\n")
+	# replace_header = re.compile('.*?: ')
+
+	# result = {}
+
+	# if len(output) >= 9:
+	# 	result = {
+	# 		'channels': get_soxi_line(replace_header, output[2]), #channels
+	# 		'sample_rate': get_soxi_line(replace_header, output[3]), #sample rate
+	# 		'precision': get_soxi_line(replace_header, output[4]), #precision
+	# 		'duration': re.sub('\s=.+$', '', get_soxi_line(replace_header, output[5])), #duration
+	# 		'bitrate': get_soxi_line(replace_header, output[7]), #bit rate
+	# 		'encoding': get_soxi_line(replace_header, output[8]) #encoding
+	# 	}
+	# else:
+	# 	print "ERROR: " + file_path
+	# return result
+
+
 def get_file_extrinsic_information(file_path):
 	# regular expression: (path) (id) (side) (digg unit) (take) (notes)
-	m = re.match('^(?:.+/)(.+?)-([ab])-(d\d+)-(t\d+)(?:-(.+))?.wav$', file_path)
+	m = re.match('^(?:.+\/)(.+?)-([ab])-(d\d+)-(t\d+)(?:-(.+))?.wav$', file_path)
 	file_entry = {}
 	if m:
 		file_entry = {
@@ -127,7 +157,6 @@ def get_file_information(file_path):
 	result = []
 	file_extrinsic_information = get_file_extrinsic_information(file_path)
 	file_intrinsic_information = get_file_intrinsic_information(file_path)
-
 	# split file_extrinsic_information id by special character "_" and
 	# enter each id modified in the result
 	ids = file_extrinsic_information['id'].split('_')

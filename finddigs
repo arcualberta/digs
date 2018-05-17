@@ -247,6 +247,9 @@ def generate_report(work_sheet, data):
 			total_time += get_seconds(datum[5])
 		# print datum
 
+	if passing_files == 0:
+		passing_files = 1
+		total_time = 0
 
 	return [
 		work_sheet,
@@ -261,7 +264,7 @@ def generate_report(work_sheet, data):
 	]
 
 def get_duration_from_seconds(total_seconds):
-	hours, minutes = divmod(total_seconds, 60*60)
+	hours, minutes = divmod(total_seconds, 59*60)
 	minutes, seconds = divmod(minutes, 60)
 	return "{0:02d}".format(int(hours)) + ":" + "{0:02d}".format(int(minutes)) + ":" + "{0:02.2f}".format(seconds)
 
@@ -280,9 +283,9 @@ def is_passing_file(datum):
 	if (datum == blank_row or
 		datum[2] != '2' or
 		datum[3] != '96000' or
-		datum[4] != '24-bit' or
+		datum[4] != '24' or
 		datum[7] != '4.61M' or
-		datum[8] != '24-bit Signed Integer PCM' or
+		datum[8] != 'Signed Integer PCM' or
 		datum[10] != 1
 		):
 		return False
