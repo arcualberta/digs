@@ -8,10 +8,10 @@ import time
 import csv
 import subprocess
 import hashlib
+import datetime
 from os import path
 from tqdm import tqdm
 from multiprocessing import Pool
-
 
 def main():
 
@@ -34,7 +34,8 @@ def main():
 		'duration',
 		'size',
 		'md5',
-		'updated at (UTC)',
+		'created',
+		'date'
 
 	]
 
@@ -52,7 +53,7 @@ def main():
 	pool = Pool(8)
 	file_entries = list(tqdm(pool.imap(get_file_information, file_paths), total=len(file_paths)))
 	# csv_writer.writerows(file_entries)
-	for file_entry in file_entries:		
+	for file_entry in file_entries:
 		csv_writer.writerows(file_entry)
 		# for entry in file_entry:
 		# 	csv_writer.writerow(entry)
@@ -127,18 +128,20 @@ def get_file_extrinsic_information(file_path):
 			'dig': m.group(3),
 			'take': m.group(4),
 			'notes': m.group(5),
-			'updated at (UTC)': time.strftime("%d %b %Y %H:%M:%S", time.gmtime(path.getmtime(file_path))),
+			'created': time.strftime("%d %b %Y %H:%M:%S", time.gmtime(path.getmtime(file_path))),
 			'size': get_size(path.getsize(file_path)),
-			'md5': md5(file_path)
+			'md5': md5(file_path),
+			'date' : datetime.date.today()
 		}
 	else :
 		file_name_regex = re.match('^(?:.+/)(.+?).wav$', file_path)
 		file_entry = {
 			'path': path.abspath(file_path),
 			'id': file_name_regex.group(1),
-			'updated at (UTC)': time.strftime("%d %b %Y %H:%M:%S", time.gmtime(path.getmtime(file_path))),
+			'created': time.strftime("%d %b %Y %H:%M:%S", time.gmtime(path.getmtime(file_path))),
 			'size': get_size(path.getsize(file_path)),
-			'md5': md5(file_path)
+			'md5': md5(file_path),
+			'date' : datetime.date.today()
 		}
 
 	return file_entry
