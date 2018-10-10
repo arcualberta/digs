@@ -248,18 +248,13 @@ def generate_report(work_sheet, data):
 			passing_files += 1
 
 			total_time += get_seconds(datum[5])
-		# print datum
+		
 
 	average_duration_seconds = 0
 	
-	if passing_files != 0:
-		print "zero"
+	if passing_files != 0:		
 		average_duration_seconds = get_duration_from_seconds(total_time / passing_files)	
 	
-	print total_time
-	print passing_files
-
-	print average_duration_seconds	
 	return [
 		work_sheet,
 		# all inventory files
@@ -288,8 +283,7 @@ def get_seconds(time):
 
 def is_passing_file(datum):
 	blank_row = ['', '', '', '', '', '', '', '', '', '', '', '[]', 0]
-	print datum
-	print blank_row
+	
 	# check expected values
 	if (datum == blank_row or
 		datum[2] != '2' or
